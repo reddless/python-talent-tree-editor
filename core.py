@@ -30,8 +30,6 @@ class RUNTIME:
         RUNTIME.curr_hovered = new_hovered
         try:
             RUNTIME.curr_hovered.set_hovered(True)
-            if type(RUNTIME.curr_hovered).__name__ == "TalentView":
-                print("yes")
         except:
             pass
 
