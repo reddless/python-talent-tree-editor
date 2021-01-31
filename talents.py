@@ -8,22 +8,35 @@ if __name__ == "__main__":
 
     RUNTIME.init()
 
-    multi_tree = MultiTreeData("Awesome Talent Tree")
-    trees = []
-    talents = [[],[],[]]
-    for i in range(3):
+    multi_tree = MultiTreeData()
+
+    multi_tree_data_dict = {
+        "name": "Awesome Talent Tree",
+        "points_remaining": 51,
+        "trees": {}
+    }
+    for index in range(3):
         icon_names = os.listdir("./icons/spells")
         icon_paths = ["./icons/spells/"+s for s in random.choices(icon_names, k=28)]
-        tree = TreeData("spec", icon_paths[0], "./backgrounds/blank.png", index=i)
-        for y in range(7):
-            for x in range(4):
-                talent = TalentData("Nature's Blessing", icon_paths[4*y+x], 5, "Description $%"+" aasdwe"*int(random.random()*20), "10 20 30 40 50", row=y, col=x)
-                talents[i] += [talent]
-                tree.add_talent(talent if random.random() > 0.6 else TalentPlaceholderData(y,x))
-        trees += [tree]
-        multi_tree.add_tree(tree)
+        tree_data_dict = {
+            "name": "spec",
+            "icon": icon_paths[0],
+            "background": "./backgrounds/blank.png",
+            "talents": {}
+        }
+        for row in range(7):
+            for col in range(4):
+                talent_data_dict = {
+                    "name": "Nature's Blessing",
+                    "icon": icon_paths[4*row+col],
+                    "ranks": 5, 
+                    "description_text": "Description $%"+" aasdwe"*int(random.random()*20),
+                    "description_values": "10 20 30 40 50"
+                }
+                tree_data_dict["talents"]["{},{}".format(row,col)] = talent_data_dict
+        multi_tree_data_dict["trees"]["{}".format(index)] = tree_data_dict
     
-    # multi_tree = MultiTreeData.load_from_json("./_test_data/multi_tree_example.json")
+    multi_tree.load_from_dict(multi_tree_data_dict)
 
     RUNTIME.show(multi_tree)
 

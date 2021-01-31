@@ -5,6 +5,7 @@ from core import *
 from buttons import *
 import os
 import json
+import numpy as np
 
 
 
@@ -20,7 +21,10 @@ class TalentView(QWidget):
         super().__init__()
         self.setGeometry(0, 0, VALUES.TALENT_CELL_SIZE, VALUES.TALENT_CELL_SIZE)
         self.talent = talent
-        self.is_hovered = False
+        self.hovered = False
+        self.pressed = False
+        self.selected = False
+        self.blocked_by_arrow = False
         font = QFont()
         font.setPointSize(int(round(VALUES.TALENT_FONT_SIZE)))
         self.points_text = QLabel(self)
@@ -29,78 +33,111 @@ class TalentView(QWidget):
         self.points_text.setGeometry(VALUES.TALENT_POINTS_OFFSET_X,VALUES.TALENT_POINTS_OFFSET_Y,VALUES.TALENT_POINTS_SIZE,VALUES.TALENT_POINTS_SIZE)
         self.setMouseTracking(True)
         self.setAttribute(Qt.WA_Hover)
+        self.rect_icon = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_ICON_SIZE))
+        self.rect_border = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_BORDER_SIZE))
+        self.rect_hover = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_HOVER_SIZE))
+        self.rect_accent = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_ACCENT_SIZE))
+        self.rect_bubble = QRect(VALUES.TALENT_BUBBLE_OFFSET,VALUES.TALENT_BUBBLE_OFFSET,VALUES.TALENT_BUBBLE_SIZE,VALUES.TALENT_BUBBLE_SIZE)
+        self.rect_add_talent_h = QRect(38,28,24,44)
+        self.rect_add_talent_v = QRect(28,38,44,24)
     
     def paintEvent(self, event):
-        rect_icon = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_ICON_SIZE))
-        rect_border = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_BORDER_SIZE))
-        rect_hover = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_HOVER_SIZE))
-        rect_accent = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_ACCENT_SIZE))
-        rect_bubble = QRect(VALUES.TALENT_BUBBLE_OFFSET,VALUES.TALENT_BUBBLE_OFFSET,VALUES.TALENT_BUBBLE_SIZE,VALUES.TALENT_BUBBLE_SIZE)
-
-        if self.talent.check_can_add_point() or self.talent.points_spent > 0:
-            painter = QPainter(self)
-            painter.drawPixmap(rect_icon, QPixmap(self.talent.icon))
-            painter.drawPixmap(rect_border, PIXMAPS.TALENT_BORDER)
-            if self.is_hovered: 
-                painter.drawPixmap(rect_hover, PIXMAPS.TALENT_HOVER)
-            if self.talent.points_spent == self.talent.ranks:
-                painter.drawPixmap(rect_accent, PIXMAPS.TALENT_ACCENT_GOLD)
+        painter = QPainter(self)
+        if self.blocked_by_arrow:
+            pass
+        elif RUNTIME.in_edit_mode:
+            if self.talent.name == None:
+                if self.hovered:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.TALENT_ADD_BUTTON_HOVER)
+                else:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.TALENT_ADD_BUTTON_NOHOVER)
+                self.points_text.setVisible(False)
             else:
-                painter.drawPixmap(rect_accent, PIXMAPS.TALENT_ACCENT_GREEN)
-            painter.drawPixmap(rect_bubble, PIXMAPS.TALENT_BUBBLE)
-            self.points_text.setText(self.get_html_points())
-            self.points_text.setVisible(True)
+                if self.hovered or self.selected:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.get_pixmap(self.talent.icon, greyscale=False))
+                    painter.drawPixmap(self.rect_border, PIXMAPS.TALENT_BORDER)
+                    painter.drawPixmap(self.rect_hover, PIXMAPS.TALENT_HOVER_GOLD)
+                    painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GOLD)
+                    painter.drawPixmap(self.rect_bubble, PIXMAPS.TALENT_BUBBLE_GOLD)
+                    self.points_text.setText(self.get_html_ranks())
+                    self.points_text.setVisible(True)
+                else:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.get_pixmap(self.talent.icon, greyscale=True))
+                    painter.drawPixmap(self.rect_border, PIXMAPS.TALENT_BORDER)
+                    painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GREY)
+                    painter.drawPixmap(self.rect_bubble, PIXMAPS.TALENT_BUBBLE_GREY)
+                    self.points_text.setText(self.get_html_ranks(color="gray"))
+                    self.points_text.setVisible(True)
         else:
-            painter = QPainter(self)
-            painter.drawPixmap(rect_icon, QPixmap.fromImage(QImage(QPixmap.toImage(QPixmap(self.talent.icon)).convertToFormat(QImage.Format_Grayscale8))))
-            painter.drawPixmap(rect_border, PIXMAPS.TALENT_BORDER)
-            if self.is_hovered: 
-                painter.drawPixmap(rect_hover, PIXMAPS.TALENT_HOVER)
-            painter.drawPixmap(rect_accent, PIXMAPS.TALENT_ACCENT_GREY)
-            self.points_text.setVisible(False)
+            if self.talent.name == None:
+                return
+            else:
+                if self.talent.check_can_add_point() or self.talent.points_spent > 0:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.get_pixmap(self.talent.icon, greyscale=False))
+                    painter.drawPixmap(self.rect_border, PIXMAPS.TALENT_BORDER)
+                    if self.hovered: 
+                        painter.drawPixmap(self.rect_hover, PIXMAPS.TALENT_HOVER_BLUE)
+                    if self.talent.points_spent == self.talent.ranks:
+                        painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GOLD)
+                    else:
+                        painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GREEN)
+                    painter.drawPixmap(self.rect_bubble, PIXMAPS.TALENT_BUBBLE_GOLD)
+                    self.points_text.setText(self.get_html_points())
+                    self.points_text.setVisible(True)
+                else:
+                    painter.drawPixmap(self.rect_icon, PIXMAPS.get_pixmap(self.talent.icon, greyscale=True))
+                    painter.drawPixmap(self.rect_border, PIXMAPS.TALENT_BORDER)
+                    if self.hovered: 
+                        painter.drawPixmap(self.rect_hover, PIXMAPS.TALENT_HOVER_BLUE)
+                    painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GREY)
+                    self.points_text.setVisible(False)
 
     def mouseMoveEvent(self, event):
-        if self.check_event_in_mouse_area(event):
-            if not self.is_hovered:
-                self.is_hovered = True
-                self.update()
+        if self.check_event(event):
+            RUNTIME.set_curr_hovered(self)
+            if not RUNTIME.in_edit_mode or self.talent.name != None:
                 RUNTIME.get_top_view().update_tooltip(self)
         else:
-            if self.is_hovered:
-                self.is_hovered = False
-                self.update()
-                RUNTIME.get_top_view().update_tooltip(self)
+            RUNTIME.clear_hovered()
+            RUNTIME.get_top_view().update_tooltip(self)
 
     def mousePressEvent(self, event):
-        if self.check_event_in_mouse_area(event):
-            if event.button() == Qt.LeftButton:
-                self.talent.add_point()
-            elif event.button() == Qt.RightButton:
-                self.talent.subtract_point()
-            self.talent.tree.reevaluate_subtree(0)
-            RUNTIME.get_top_view().update_points()
-            RUNTIME.get_top_view().update_tooltip(self)
+        if RUNTIME.in_edit_mode:
+            if self.check_event(event):
+                if event.button() == Qt.LeftButton:
+                    RUNTIME.get_top_view().show_edit_talent_view(self.talent)
+                    return
         else:
-            super().mousePressEvent(event)
+            if self.check_event(event):
+                if event.button() == Qt.LeftButton:
+                    self.talent.add_point()
+                elif event.button() == Qt.RightButton:
+                    self.talent.subtract_point()
+                self.talent.tree.reevaluate_subtree(0)
+                RUNTIME.get_top_view().update_points()
+                RUNTIME.get_top_view().update_tooltip(self)
+                return
+        super().mousePressEvent(event)
     
     def wheelEvent(self, event):
-        if self.check_event_in_mouse_area(event):
-            if event.angleDelta().y() > 0:
-                self.talent.add_point()
-            elif event.angleDelta().y() < 0:
-                self.talent.subtract_point()
-            self.talent.tree.reevaluate_subtree(0)
-            RUNTIME.get_top_view().update_points()
-            RUNTIME.get_top_view().update_tooltip(self)
-
-    def check_event_in_mouse_area(self, event):
-        dead_zone = (VALUES.TALENT_CELL_SIZE - VALUES.TALENT_MOUSEAREA_SIZE)/2
-        return (event.x() >= dead_zone) and (event.x() <= VALUES.TALENT_CELL_SIZE - dead_zone) and (event.y() >= dead_zone) and (event.y() <= VALUES.TALENT_CELL_SIZE - dead_zone)
-        
-    def delete(self):
-        self.talent.talent_view = None
-        self.talent = None
+        if RUNTIME.in_edit_mode:
+            pass
+        else:
+            if self.check_event(event):
+                if event.angleDelta().y() > 0:
+                    self.talent.add_point()
+                elif event.angleDelta().y() < 0:
+                    self.talent.subtract_point()
+                self.talent.tree.reevaluate_subtree(0)
+                RUNTIME.get_top_view().update_points()
+                RUNTIME.get_top_view().update_tooltip(self)
     
+    def check_event(self, event):
+        if RUNTIME.in_edit_mode:
+            if self.talent.name == None:
+                return event.pos() in self.rect_add_talent_h or event.pos() in self.rect_add_talent_v
+        return event.pos() in self.rect_border
+
     def get_html_tooltip(self):
         text = "<font color=\"white\" size=5>{}</font>".format(self.talent.name)
         text += "<br/><font color=\"white\">Rank {}/{}</font>".format(self.talent.points_spent, self.talent.ranks)
@@ -121,6 +158,19 @@ class TalentView(QWidget):
     
     def get_html_points(self):
         return "<font color=\"{}\">{}</font>".format("gold" if self.talent.points_spent == self.talent.ranks else "#1bed00", self.talent.points_spent)
+    
+    def get_html_ranks(self, color="gold"):
+        return "<font color=\"{}\">{}</font>".format(color, self.talent.ranks)
+
+    def set_hovered(self, hovered):
+        if self.hovered != hovered:
+            self.hovered = hovered
+            self.update()
+
+    def set_selected(self, selected):
+        if self.selected != selected:
+            self.selected = selected
+            self.update()
 
 
 
@@ -140,23 +190,27 @@ class TreeView(QWidget):
         self.background = QLabel(self)
         self.background.resize(self.width(), self.height())
         self.background.setPixmap(QPixmap(self.tree.background).scaledToHeight(self.height()))
-        self.grid = QGridLayout()
-        self.grid.setContentsMargins(
-            VALUES.TREE_CONTENTS_MARGIN_LEFT,
-            VALUES.TREE_CONTENTS_MARGIN_TOP,
-            VALUES.TREE_CONTENTS_MARGIN_RIGHT,
-            VALUES.TREE_CONTENTS_MARGIN_BOTTOM)
-        self.setLayout(self.grid)
+        self.background.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.grid_views = np.ndarray(shape=(7,4), dtype=TalentView)
     
-    def add_talent_view(self, talent_view):
+    def data_updated(self):
+        self.background.setPixmap(QPixmap(self.tree.background).scaledToHeight(self.height()))
+    
+    def set_talent_view(self, talent_view):
         row = talent_view.talent.row
         col = talent_view.talent.col
-        if self.grid.itemAtPosition(row, col) != None:
-            self.grid.itemAtPosition(row, col).widget().delete()
-        self.grid.addWidget(talent_view, row, col)
-    
-    def delete(self):
-        pass
+        self.grid_views[row,col] = talent_view
+        talent_view.setParent(self)
+        W = (VALUES.TREE_WIDTH-40)/4
+        H = (VALUES.TREE_HEIGHT-10)/7
+        w = talent_view.width()
+        h = talent_view.height()
+        ww = (W-w)/2
+        hh = (H-h)/2
+        x = 20 + col*W + ww
+        y = 5 + row*H + hh
+        talent_view.move(x, y)
+        talent_view.update()
     
     def get_html_tree_name(self):
         return "<font color=\"gold\">{}</font>".format(self.tree.name)
@@ -197,13 +251,13 @@ class MultiTreeView(QMainWindow):
 
         self.tree_views = [None, None, None]
         self.tooltip_view = TooltipView(self)
-        self.new_talent_view = EditTalentView(self)
+        self.edit_talent_view = EditTalentView(self)
         self.mouse_held = False
         self.mouse_old_pos = None
 
         self.points_remaining_label = QLabel()
         self.points_remaining_label.setParent(self)
-        self.points_remaining_label.setGeometry(735, 773, 315, 17)
+        self.points_remaining_label.setGeometry(960, 773, 315, 17)
         self.points_remaining_label.setStyleSheet("font: {}px Arial Narrow".format(VALUES.TREE_POINTS_FONT_SIZE))
         self.points_remaining_label.setAlignment(Qt.AlignRight)
         self.points_remaining_label.setText(self.get_html_points_remaining())
@@ -245,16 +299,41 @@ class MultiTreeView(QMainWindow):
             self.points_spent_labels[i].setText("")
             self.points_spent_labels[i].setAttribute(Qt.WA_TransparentForMouseEvents)
         
-        self.close_is_hovered = False
-        self.close_button = CloseButtonView(self, f=lambda: RUNTIME.get_app().quit())
-        self.close_button.move(VALUES.CLOSE_MAIN_X, VALUES.CLOSE_MAIN_Y)
-        self.close_button.update_pixmap()
-        self.last_updated_time = None
+        self.buttons = {}
 
-    def add_tree_view(self, tree_view):
+        self.close_is_hovered = False
+        self.buttons["close"] = CloseButtonView(self, f=lambda: RUNTIME.get_app().quit())
+        self.buttons["close"].move(VALUES.CLOSE_MAIN_X, VALUES.CLOSE_MAIN_Y)
+        self.buttons["close"].update_pixmap()
+
+        self.buttons["save"] = SaveButtonView(self)
+        self.buttons["save"].move(VALUES.MAIN_BUTTON_SAVE_X, VALUES.MAIN_BUTTON_SAVE_Y)
+        self.buttons["save"].update_pixmap()
+
+        self.buttons["load"] = LoadButtonView(self)
+        self.buttons["load"].move(VALUES.MAIN_BUTTON_LOAD_X, VALUES.MAIN_BUTTON_LOAD_Y)
+        self.buttons["load"].update_pixmap()
+
+        self.buttons["edit"] = EditButtonView(self, f=lambda:  [
+            self.buttons["edit"].set_enabled(False),
+            self.buttons["accept"].set_enabled(True),
+            RUNTIME.set_edit_mode(True),
+            self.update_talents()])
+        self.buttons["edit"].move(VALUES.MAIN_BUTTON_EDIT_X, VALUES.MAIN_BUTTON_EDIT_Y)
+        self.buttons["edit"].update_pixmap()
+
+        self.buttons["accept"] = AcceptButtonView(self, f=lambda: [
+            self.buttons["edit"].set_enabled(True),
+            self.buttons["accept"].set_enabled(False),
+            RUNTIME.set_edit_mode(False),
+            self.update_talents()])
+        self.buttons["accept"].move(VALUES.MAIN_BUTTON_EDIT_X, VALUES.MAIN_BUTTON_EDIT_Y)
+        self.buttons["accept"].update_pixmap()
+        self.buttons["accept"].set_enabled(False)
+
+
+    def set_tree_view(self, tree_view):
         index = tree_view.tree.index
-        if self.tree_views[index] != None:
-            self.tree_views[index].delete()
         self.tree_views[index] = tree_view
         tree_view.setParent(self)
         tree_view.move(VALUES.TREE_X + index*(VALUES.TREE_WIDTH + VALUES.FRAME_INTERTREE_WIDTH), VALUES.TREE_Y)
@@ -263,19 +342,24 @@ class MultiTreeView(QMainWindow):
     def get_html_points_remaining(self):
         return "<font color=\"gold\">Talent Points: </font><font color=\"white\">{}</font>".format(self.multi_tree.points_remaining)
 
-    def check_event_in_close_area(self, event):
-        return (event.x() >= VALUES.CLOSE_MAIN_X) and (event.x() <= VALUES.CLOSE_MAIN_X + VALUES.CLOSE_WIDTH) and (event.y() >= VALUES.CLOSE_MAIN_Y) and (event.y() <= VALUES.CLOSE_MAIN_Y + VALUES.CLOSE_HEIGHT)
-
     def mousePressEvent(self, event):
-        if self.check_event_in_close_area(event):
-            self.close_button.set_pressed(True)
-        else:
-            self.mouse_held = True
-            self.mouse_old_pos = event.globalPos()
+        for button_view in self.buttons.values():
+            if event.pos() in button_view.geometry() and button_view.enabled:
+                RUNTIME.curr_pressed = button_view
+                button_view.set_pressed(True)
+                return
+        self.mouse_held = True
+        self.mouse_old_pos = event.globalPos()
 
     def mouseMoveEvent(self, event):
+        RUNTIME.last_mouse_move_event = event
         self.tooltip_view.hide_tooltip()
-        self.close_button.set_hovered(self.check_event_in_close_area(event))
+        for button_view in self.buttons.values():
+            if event.pos() in button_view.geometry() and button_view.enabled:
+                if RUNTIME.curr_hovered != button_view:
+                    RUNTIME.set_curr_hovered(button_view) 
+                return
+        RUNTIME.clear_hovered()
         if self.mouse_held:
             mouse_new_pos = event.globalPos()
             curr_pos = self.mapToGlobal(self.pos())
@@ -285,23 +369,43 @@ class MultiTreeView(QMainWindow):
             self.mouse_old_pos = mouse_new_pos
 
     def mouseReleaseEvent(self, event):
-        self.close_button.set_pressed(False)
+        for button_view in self.buttons.values():
+            if event.pos() in button_view.geometry() and button_view.enabled:
+                if RUNTIME.curr_pressed == button_view:
+                    button_view.set_pressed(False)
+                RUNTIME.clear_pressed()
+                self.mouse_held = False
+                self.mouse_old_pos = None
+                if RUNTIME.last_mouse_move_event != None:
+                    self.mouseMoveEvent(RUNTIME.last_mouse_move_event)
+                return
+        RUNTIME.clear_pressed()
         self.mouse_held = False
         self.mouse_old_pos = None
     
     def update_icon(self, tree_index):
         if self.tree_views[tree_index] != None:
-            if self.multi_tree.points_remaining == 0:
-                saturation = 1-((51-self.tree_views[tree_index].tree.points_spent)/51)**3
-                pixmap = UTILS.get_pixmap_with_saturation(self.tree_views[tree_index].tree.icon, saturation)
-                self.tree_icons[tree_index].setPixmap(pixmap.scaledToWidth(self.tree_icons[tree_index].width()))
-                self.tree_icons[tree_index].raise_()
-                self.update_frame()
+            tree = self.tree_views[tree_index].tree
+            tree_icon = self.tree_icons[tree_index]
+            if RUNTIME.in_edit_mode:
+                if RUNTIME.curr_hovered == tree_icon:
+                    tree_icon.setPixmap(PIXMAPS.get_pixmap(tree.icon).scaledToWidth(tree_icon.width()))
+                    tree_icon.raise_()
+                    self.update_frame()
+                else:
+                    tree_icon.setPixmap(PIXMAPS.get_pixmap(tree.icon, greyscale=True).scaledToWidth(tree_icon.width()))
+                    tree_icon.raise_()
+                    self.update_frame()
             else:
-                pixmap = QPixmap(self.tree_views[tree_index].tree.icon)
-                self.tree_icons[tree_index].setPixmap(pixmap.scaledToWidth(self.tree_icons[tree_index].width()))
-                self.tree_icons[tree_index].raise_()
-                self.update_frame()
+                if self.multi_tree.points_remaining == 0:
+                    saturation = 1-((51-self.tree_views[tree_index].tree.points_spent)/51)**3
+                    tree_icon.setPixmap(UTILS.get_pixmap_with_saturation(tree.icon, saturation).scaledToWidth(tree_icon.width()))
+                    tree_icon.raise_()
+                    self.update_frame()
+                else:
+                    tree_icon.setPixmap(PIXMAPS.get_pixmap(tree.icon).scaledToWidth(tree_icon.width()))
+                    tree_icon.raise_()
+                    self.update_frame()
     
     def update_icons(self):
         for index in range(3):
@@ -309,7 +413,8 @@ class MultiTreeView(QMainWindow):
     
     def update_frame(self):
         self.frame.raise_()
-        self.close_button.raise_()
+        for button in self.buttons.values():
+            button.raise_()
         self.update_points()
         self.tooltip_view.background.raise_()
         self.tooltip_view.raise_()
@@ -317,18 +422,22 @@ class MultiTreeView(QMainWindow):
     def update_points(self):
         self.points_remaining_label.raise_()
         self.points_remaining_label.setText(self.get_html_points_remaining())
-        for i in range(3):
-            self.tree_labels[i].raise_()
-            self.points_spent_labels[i].raise_()
-            if self.tree_views[i] != None:
-                self.tree_labels[i].setText(self.tree_views[i].get_html_tree_name())
-                self.points_spent_labels[i].setText(self.tree_views[i].get_html_points_spent())
+        for index in range(3):
+            self.tree_labels[index].raise_()
+            self.points_spent_labels[index].raise_()
+            if self.tree_views[index] != None:
+                self.tree_labels[index].setText(self.tree_views[index].get_html_tree_name())
+                self.points_spent_labels[index].setText(self.tree_views[index].get_html_points_spent())
+    
+    def update_talents(self):
+        for index in range(3):
+            self.tree_views[index].update()
 
     def update_tooltip(self, talent_view):
         self.tooltip_view.update_tooltip(talent_view)
     
     def show_edit_talent_view(self, talent):
-        self.new_talent_view.open_window(talent)
+        self.edit_talent_view.open_window(talent)
 
 
 
@@ -356,13 +465,13 @@ class TooltipView(QLabel):
             self.hide_tooltip()
 
         self.previous_talent_view = talent_view
-        if talent_view.is_hovered:
+        if talent_view.hovered and talent_view.talent.name != None:
             old_x = self.x()
             old_y = self.y()
             old_geometry = self.geometry()
             self.setText(talent_view.get_html_tooltip())
             self.adjustSize()
-            tree_position = talent_view.talent.tree.tree_view.geometry().topLeft()
+            tree_position = talent_view.talent.tree.view.geometry().topLeft()
             talent_position = talent_view.geometry().topRight()
             new_x = tree_position.x() + talent_position.x()
             new_y = talent_position.y() - self.height() + VALUES.TOOLTIP_VERTICAL_OFFSET
@@ -394,39 +503,6 @@ class TooltipView(QLabel):
     
     def mouseMoveEvent(self, event):
         self.hide_tooltip()
-
-
-
-#############################################################################################################################################
-     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###
-#############################################################################################################################################
-
-
-
-class TalentPlaceholderView(QWidget):
-
-    def __init__(self, talent):
-        super().__init__()
-        self.setGeometry(0, 0, 100, 100)
-        self.opacity = 0.2
-        self.size = 50
-        self.talent = talent
-        self.setAttribute(Qt.WA_Hover)
-    
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setOpacity(self.opacity)
-        pixmap = QPixmap(PATHS.TALENT_ADD_BUTTON)
-        painter.drawPixmap(QRect((100-self.size)/2,(100-self.size)/2,self.size,self.size), pixmap)
-    
-    def mousePressEvent(self, event):
-        self.opacity = min(1, self.opacity + 0.2)
-        self.size = min(70, self.size + 5)
-        self.update()
-        RUNTIME.get_top_view().show_edit_talent_view(self.talent)
-    
-    def delete(self):
-        pass
 
 
 
@@ -558,43 +634,24 @@ class EditTalentView(QLabel):
         self.buttons = {}
 
         self.buttons["save"] = SaveButtonView(self, f=lambda: self.save_talent_prompt())
-        self.buttons["save"].setGeometry(
-            VALUES.EDIT_TALENT_BUTTON_SAVE_X,
-            VALUES.EDIT_TALENT_BUTTON_SAVE_Y,
-            VALUES.EDIT_TALENT_BUTTON_SAVE_W,
-            VALUES.EDIT_TALENT_BUTTON_SAVE_H)
+        self.buttons["save"].move(VALUES.EDIT_TALENT_BUTTON_SAVE_X, VALUES.EDIT_TALENT_BUTTON_SAVE_Y)
         self.buttons["save"].update_pixmap()
 
         self.buttons["load"] = LoadButtonView(self, f=lambda: self.load_talent_prompt())
-        self.buttons["load"].setGeometry(
-            VALUES.EDIT_TALENT_BUTTON_LOAD_X,
-            VALUES.EDIT_TALENT_BUTTON_LOAD_Y,
-            VALUES.EDIT_TALENT_BUTTON_LOAD_W,
-            VALUES.EDIT_TALENT_BUTTON_LOAD_H)
+        self.buttons["load"].move(VALUES.EDIT_TALENT_BUTTON_LOAD_X, VALUES.EDIT_TALENT_BUTTON_LOAD_Y)
         self.buttons["load"].update_pixmap()
 
         self.buttons["accept"] = AcceptButtonView(self, f=lambda: self.accept_talent_edit())
-        self.buttons["accept"].setGeometry(
-            VALUES.EDIT_TALENT_BUTTON_ACCEPT_X,
-            VALUES.EDIT_TALENT_BUTTON_ACCEPT_Y,
-            VALUES.EDIT_TALENT_BUTTON_ACCEPT_W,
-            VALUES.EDIT_TALENT_BUTTON_ACCEPT_H)
+        self.buttons["accept"].move(VALUES.EDIT_TALENT_BUTTON_ACCEPT_X, VALUES.EDIT_TALENT_BUTTON_ACCEPT_Y)
         self.buttons["accept"].update_pixmap()
 
-        self.buttons["delete"] = DeleteButtonView(self)
-        self.buttons["delete"].setGeometry(
-            VALUES.EDIT_TALENT_BUTTON_DELETE_X,
-            VALUES.EDIT_TALENT_BUTTON_DELETE_Y,
-            VALUES.EDIT_TALENT_BUTTON_DELETE_W,
-            VALUES.EDIT_TALENT_BUTTON_DELETE_H)
+        self.buttons["delete"] = DeleteButtonView(self, f=lambda: self.delete_talent())
+        self.buttons["delete"].move(VALUES.EDIT_TALENT_BUTTON_DELETE_X, VALUES.EDIT_TALENT_BUTTON_DELETE_Y)
         self.buttons["delete"].update_pixmap()
 
         self.buttons["close"] = CloseButtonView(self, f=lambda: self.close_window())
         self.buttons["close"].move(VALUES.EDIT_TALENT_BUTTON_CLOSE_X, VALUES.EDIT_TALENT_BUTTON_CLOSE_Y)
         self.buttons["close"].update_pixmap()
-
-        self.curr_hover = None
-        self.curr_pressed = None
     
     def paintEvent(self, event):
         self.edit_talent_icon.raise_()
@@ -615,48 +672,49 @@ class EditTalentView(QLabel):
     def mousePressEvent(self, event):
         for button_view in self.buttons.values():
             if event.pos() in button_view.geometry():
-                self.curr_pressed = button_view
+                RUNTIME.curr_pressed = button_view
                 button_view.set_pressed(True)
-                break
+                return
     
     def mouseMoveEvent(self, event):
         for button_view in self.buttons.values():
             if event.pos() in button_view.geometry():
-                if self.curr_hover != button_view:
-                    if self.curr_hover != None:
-                        self.curr_hover.set_hovered(False)
-                    self.curr_hover = button_view
-                    self.curr_hover.set_hovered(True)
+                if RUNTIME.curr_hovered != button_view:
+                    RUNTIME.set_curr_hovered(button_view)
                 return
-        if self.curr_hover != None:
-            self.curr_hover.set_hovered(False)
-            self.curr_hover = None
+        RUNTIME.clear_hovered()
     
     def mouseReleaseEvent(self, event):
         for button_view in self.buttons.values():
             if event.pos() in button_view.geometry():
-                self.curr_pressed = button_view
-                button_view.set_pressed(False)
-                break
-    
-    def mouseLeaveEvent(self, event):
-        if self.curr_hover != None:
-            self.curr_hover.set_hovered(False)
-            self.curr_hover = None
+                if RUNTIME.curr_pressed == button_view:
+                    button_view.set_pressed(False)
+                RUNTIME.clear_pressed()
+                return
+        RUNTIME.clear_pressed()
 
     def open_window(self, talent):
         self.modifying_talent = talent
-        self.edit_talent_icon.set_icon(PATHS.ICON_QUESTION)
-        self.edit_talent_name.clear()
-        self.edit_talent_ranks.clear()
-        self.edit_talent_desc_text.clear()
-        self.edit_talent_desc_vals.clear()
+        talent.view.set_selected(True)
+        if talent.name == None:
+            self.edit_talent_icon.set_icon(PATHS.ICON_QUESTION)
+            self.edit_talent_name.clear()
+            self.edit_talent_ranks.clear()
+            self.edit_talent_desc_text.clear()
+            self.edit_talent_desc_vals.clear()
+        else:
+            self.edit_talent_icon.set_icon(talent.icon)
+            self.edit_talent_name.setText(talent.name)
+            self.edit_talent_ranks.setText(str(talent.ranks))
+            self.edit_talent_desc_text.setText(talent.description_text)
+            self.edit_talent_desc_vals.setText(talent.description_values)
         self.setVisible(True)
         self.edit_talent_name.setFocus()
         self.raise_()
         self.update()
 
     def close_window(self):
+        self.modifying_talent.view.set_selected(False)
         self.setVisible(False)
     
     def create_talent_data_dict(self):
@@ -665,8 +723,6 @@ class EditTalentView(QLabel):
         ranks = self.edit_talent_ranks.text()
         text = self.edit_talent_desc_text.toPlainText()
         vals = self.edit_talent_desc_vals.toPlainText()
-        if name == '' or icon == '' or ranks == '' or text == '' or vals == '':
-            return ""
         talent_data_dict = {
             "name": name,
             "icon": icon,
@@ -678,9 +734,14 @@ class EditTalentView(QLabel):
         }
         return talent_data_dict
     
+    def delete_talent(self):
+        self.modifying_talent.clear()
+        self.close_window()
+    
     def accept_talent_edit(self):
         try:
-            self.modifying_talent.tree.add_talent(self.modifying_talent.load_from_dict(self.create_talent_data_dict()))
+            self.modifying_talent.load_from_dict(self.create_talent_data_dict())
+            self.modifying_talent.view.update()
             self.close_window()
         except Exception as e:
             print(e)
@@ -707,7 +768,6 @@ class EditTalentView(QLabel):
             f.close()
         except Exception as e:
             print(e)
-
 
 
 
@@ -788,33 +848,27 @@ class PickIconScrollView(QScrollArea):
         for icon_row in self.grid_views:
             for talent_icon_view in icon_row:
                 if event.pos() in talent_icon_view.geometry():
-                    self.curr_pressed = talent_icon_view
+                    RUNTIME.curr_pressed = talent_icon_view
+                    talent_icon_view.set_pressed(True)
                     return
     
     def mouseMoveEvent(self, event):
         for icon_row in self.grid_views:
             for talent_icon_view in icon_row:
                 if event.pos() in talent_icon_view.geometry():
-                    if self.parent().curr_hover != talent_icon_view:
-                        if self.parent().curr_hover != None:
-                            self.parent().curr_hover.set_hovered(False)
-                        self.parent().curr_hover = talent_icon_view
-                        self.parent().curr_hover.set_hovered(True)
+                    if RUNTIME.curr_hovered != talent_icon_view:
+                        RUNTIME.set_curr_hovered(talent_icon_view)
                     return
-        if self.parent().curr_hover != None:
-            self.parent().curr_hover.set_hovered(False)
-            self.parent().curr_hover = None
+        RUNTIME.clear_hovered()
     
     def mouseReleaseEvent(self, event):
         for icon_row in self.grid_views:
             for talent_icon_view in icon_row:
                 if event.pos() in talent_icon_view.geometry():
-                    if self.curr_pressed == talent_icon_view:
-                        self.selected_icon = self.curr_pressed.icon
-                        self.parent().edit_talent_icon.set_icon(self.selected_icon)
-                        self.curr_pressed.update()
-                        self.curr_pressed = None
+                    if RUNTIME.curr_pressed == talent_icon_view:
+                        RUNTIME.clear_pressed()
                     return
+        RUNTIME.clear_pressed()
 
 
 
@@ -836,6 +890,7 @@ class TalentIconView(QWidget):
         self.scale = self.size/VALUES.TALENT_BORDER_SIZE
         self.setGeometry(0, 0, self.size, self.size)
         self.hovered = False
+        self.pressed = False
         self.setMouseTracking(True)
         self.rect_icon = QRect(*(lambda x: ((self.size-x)/2,(self.size-x)/2,x,x))(self.scale*VALUES.TALENT_ICON_SIZE))
         self.rect_border = QRect(*(lambda x: ((self.size-x)/2,(self.size-x)/2,x,x))(self.scale*VALUES.TALENT_BORDER_SIZE))
@@ -853,7 +908,7 @@ class TalentIconView(QWidget):
                 painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GOLD)
             else:
                 if self.hovered: 
-                    painter.drawPixmap(self.rect_hover, PIXMAPS.TALENT_HOVER)
+                    painter.drawPixmap(self.rect_hover, PIXMAPS.TALENT_HOVER_BLUE)
                 painter.drawPixmap(self.rect_accent, PIXMAPS.TALENT_ACCENT_GREY)
 
     def set_icon(self, icon):
@@ -869,6 +924,13 @@ class TalentIconView(QWidget):
         if self.hovered != hovered:
             self.hovered = hovered
             self.update()
+    
+    def set_pressed(self, pressed):
+        if self.hovered and self.pressed and not pressed:
+            self.pick_icon_scroll_view.selected_icon = self.icon
+            self.pick_icon_scroll_view.parent().edit_talent_icon.set_icon(self.icon)
+        self.pressed = pressed
+        self.update()
 
 
 
