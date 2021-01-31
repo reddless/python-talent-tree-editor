@@ -21,10 +21,10 @@ class TalentData:
         self.ranks = 0
         self.points_spent = 0
         self.prerequisite = None
-        self.dependant = None
         self.description_text = None
         self.description_values = None
         self.description_per_rank = None
+        self.arrows = set()
         self.view = TalentView(self)
     
     def parse_description_per_rank(self):
@@ -58,8 +58,11 @@ class TalentData:
     def check_sufficient_earlier_points(self):
         return sum(self.tree.points_in_row[:self.row]) >= 5*self.row
     
-    def check_dependant_is_satisfied(self):
-        return (self.dependant == None) or (self.dependant.points_spent == 0)
+    def check_dependants_are_satisfied(self):
+        for arrow in self.arrows:
+            if arrow.dst.points_spent > 0:
+                return False
+        return True
     
     def check_point_is_dispensable(self):
         for row in range(self.row+1, 7):
@@ -69,7 +72,7 @@ class TalentData:
     
     def refresh_status(self):
         if (self.points_spent > 0) and (not self.check_prerequisite_is_satisfied() or not self.check_sufficient_earlier_points()):
-            self.tree.points_in_row[row] -= self.points_spent
+            self.tree.points_in_row[self.row] -= self.points_spent
             self.tree.points_spent -= self.points_spent
             self.points_spent = 0
         if self.view != None:
@@ -78,8 +81,8 @@ class TalentData:
     def clear(self):
         if self.prerequisite != None:
             self.prerequisite.dependant = None
-        if self.dependant != None:
-            self.dependant.prerequisite = None
+        for arrow in self.arrows:
+            self.tree.remove_arrow(arrow)
         for point in range(self.points_spent):
             self.tree.subtract_point(self)
         self.name = None
@@ -97,7 +100,7 @@ class TalentData:
             self.tree.add_point(self)
     
     def subtract_point(self):
-        if self.check_dependant_is_satisfied() and self.check_point_is_dispensable() and (self.points_spent > 0):
+        if self.check_dependants_are_satisfied() and self.check_point_is_dispensable() and (self.points_spent > 0):
             self.points_spent -= 1
             self.tree.subtract_point(self)
     
@@ -130,6 +133,7 @@ class TreeData:
         self.talent_holder = np.empty(shape=(7,4), dtype=TalentData)
         self.points_in_row = np.zeros(7)
         self.points_spent = 0
+        self.arrows = set()
         self.view = TreeView(self)
         for row in range(7):
             for col in range(4):
@@ -183,7 +187,13 @@ class TreeData:
             for row_col_str,talent_data_dict in tree_data_dict["talents"].items():
                 row, col = map(int, row_col_str.split(","))
                 self.talent_holder[row, col].load_from_dict(talent_data_dict)
-        
+    
+    def add_arrow(self, src, dst):
+        arrow = ArrowData(self, src, dst)
+        src.arrows |= {arrow}
+        dst.prerequisite = src
+        self.view.add_arrow_view(arrow.view)
+
 
 
 #############################################################################################################################################
@@ -235,3 +245,25 @@ class MultiTreeData:
                 index = int(index_str)
                 self.tree_holder[index].load_from_dict(tree_data_dict)
                 self.view.set_tree_view(self.tree_holder[index].view)
+        
+
+
+#############################################################################################################################################
+     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###     ###
+#############################################################################################################################################
+
+
+
+class ArrowData:
+
+    def __init__(self, tree, src, dst):
+        self.tree = tree
+        self.src = src
+        self.dst = dst
+        self.view = ArrowView(self)
+        
+    def remove(self):
+        self.src.arrows -= {self}
+        self.dst.prerequisite = None
+        self.tree.view.remove_arrow_view(self.view)
+        

@@ -16,6 +16,7 @@ class RUNTIME:
     curr_hovered = None
     curr_pressed = None
     in_edit_mode = False
+    edit_window_open = False
     last_mouse_move_event = None
 
     staticmethod
@@ -24,11 +25,13 @@ class RUNTIME:
 
     staticmethod
     def set_curr_hovered(new_hovered):
-        if RUNTIME.curr_hovered != None:
+        if RUNTIME.curr_hovered != new_hovered:
             RUNTIME.clear_hovered()
         RUNTIME.curr_hovered = new_hovered
         try:
             RUNTIME.curr_hovered.set_hovered(True)
+            if type(RUNTIME.curr_hovered).__name__ == "TalentView":
+                print("yes")
         except:
             pass
 
@@ -42,9 +45,22 @@ class RUNTIME:
             RUNTIME.curr_hovered = None
 
     staticmethod
+    def set_curr_pressed(new_pressed):
+        if RUNTIME.curr_pressed != new_pressed:
+            RUNTIME.clear_pressed()
+        RUNTIME.curr_pressed = new_pressed
+        try:
+            RUNTIME.curr_pressed.set_pressed(True)
+        except:
+            pass
+
+    staticmethod
     def clear_pressed():
         if RUNTIME.curr_pressed != None:
-            RUNTIME.curr_pressed.set_pressed(False)
+            try:
+                RUNTIME.curr_pressed.set_pressed(False)
+            except:
+                pass
             RUNTIME.curr_pressed = None
 
     staticmethod
@@ -92,27 +108,6 @@ class UTILS:
                 color.setHsv(color.hue(), saturation * color.saturation(), color.value())
                 image.setPixelColor(i, j, color)
         return QPixmap.fromImage(image)
-
-    # staticmethod
-    # def redraw_background_pixmap(background_view):
-    #     background_pixmap_ref = QPixmap(PATHS.WINDOW_BACKGROUND)
-    #     w = background_view.width()/2
-    #     h = background_view.height()/2
-    #     ww = background_pixmap_ref.width()
-    #     hh = background_pixmap_ref.height()
-    #     s = (lambda x: 100/(100+x))(10)
-    #     background_pixmap = QPixmap(background_view.width(), background_view.height())
-    #     image = QImage(background_view.width(), background_view.height(), 6)
-    #     image.fill(Qt.transparent)
-    #     painter = QPainter(image)
-    #     painter.setBackgroundMode(Qt.TransparentMode)
-    #     painter.drawPixmap(QRectF(0,0,w,h), background_pixmap_ref, QRectF(0,0,s*w,s*h))
-    #     painter.drawPixmap(QRectF(w,0,w,h), background_pixmap_ref, QRectF(ww-s*w,0,s*w,s*h))
-    #     painter.drawPixmap(QRectF(0,h,w,h), background_pixmap_ref, QRectF(0,hh-s*h,s*w,s*h))
-    #     painter.drawPixmap(QRectF(w,h,w,h), background_pixmap_ref, QRectF(ww-s*w,hh-s*h,s*w,s*h))
-    #     painter.end()
-    #     background_pixmap.convertFromImage(image)
-    #     background_view.setPixmap(background_pixmap)
 
 
 
@@ -164,6 +159,16 @@ class PATHS:
     EDIT_TALENT_FRAME = "./assets/edit-talent-frame.png"
     ICON_QUESTION = "./icons/items/INV_Misc_QuestionMark.png"
     BACKGROUND_BLANK = "./backgrounds/blank.png"
+    ARROW_DOWN_GREY = "./assets/arrows/down-grey.png"
+    ARROW_DOWN_GOLD = "./assets/arrows/down-gold.png"
+    ARROW_RIGHT_GREY = "./assets/arrows/right-grey.png"
+    ARROW_RIGHT_GOLD = "./assets/arrows/right-gold.png"
+    ARROW_RIGHT_DOWN_GREY = "./assets/arrows/right-down-grey.png"
+    ARROW_RIGHT_DOWN_GOLD = "./assets/arrows/right-down-gold.png"
+    ARROW_LEFT_GREY = "./assets/arrows/left-grey.png"
+    ARROW_LEFT_GOLD = "./assets/arrows/left-gold.png"
+    ARROW_LEFT_DOWN_GREY = "./assets/arrows/left-down-grey.png"
+    ARROW_LEFT_DOWN_GOLD = "./assets/arrows/left-down-gold.png"
 
 
 
@@ -190,7 +195,7 @@ class PIXMAPS:
     def get_pixmap(icon_name, greyscale=False):
         if not icon_name in PIXMAPS.__pixmap_cache__:
             PIXMAPS.__pixmap_cache__[icon_name] = QPixmap(icon_name)
-            PIXMAPS.__pixmap_cache_greyscale__[icon_name] = QPixmap.fromImage(QImage(QPixmap.toImage(QPixmap(icon_name)).convertToFormat(QImage.Format_Grayscale8)))
+            PIXMAPS.__pixmap_cache_greyscale__[icon_name] = QPixmap.fromImage(QPixmap.toImage(QPixmap(icon_name)).convertToFormat(QImage.Format_Grayscale8))
         if greyscale:
             return PIXMAPS.__pixmap_cache_greyscale__[icon_name]
         else:
@@ -211,7 +216,7 @@ class VALUES:
     REF_FRAME_HEIGHT = 805
     REF_FRAME_INTERTREE_WIDTH = 12
     REF_TOOLTIP_WIDTH = 400
-    REF_TOOLTIP_FLIPOVER_PADDING = 80
+    REF_TOOLTIP_FLIPOVER_PADDING = 100
     REF_TOOLTIP_VERTICAL_OFFSET = 130
     REF_TOOLTIP_Y_FLOOR = 120
     REF_MAIN_BUTTON_SAVE_X = 863
@@ -227,7 +232,7 @@ class VALUES:
     REF_TREE_WIDTH = 421
     REF_TREE_HEIGHT = 670
     REF_TREE_ICON_X = 18
-    REF_TREE_ICON_Y = 10
+    REF_TREE_ICON_Y = 11
     REF_TREE_ICON_SIZE = 70
     REF_TREE_LABEL_X = 80
     REF_TREE_LABEL_Y = 19
