@@ -30,8 +30,6 @@ class RUNTIME:
         RUNTIME.curr_hovered = new_hovered
         try:
             RUNTIME.curr_hovered.set_hovered(True)
-            if type(RUNTIME.curr_hovered).__name__ == "TalentView":
-                print("yes")
         except:
             pass
 
@@ -43,6 +41,7 @@ class RUNTIME:
             except:
                 pass
             RUNTIME.curr_hovered = None
+        RUNTIME.multi_tree.view.tooltip_view.hide_tooltip()
 
     staticmethod
     def set_curr_pressed(new_pressed):

@@ -19,6 +19,7 @@ import random
 class Hoverable():
     def __init__(self):
         super().__init__()
+        self.setAttribute(Qt.WA_Hover)
         self.hovered = False
     def set_hovered(self, hovered):
         if self.hovered != hovered:
@@ -65,7 +66,6 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
         self.points_text.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.points_text.setGeometry(VALUES.TALENT_POINTS_OFFSET_X,VALUES.TALENT_POINTS_OFFSET_Y,VALUES.TALENT_POINTS_SIZE,VALUES.TALENT_POINTS_SIZE)
         self.setMouseTracking(True)
-        self.setAttribute(Qt.WA_Hover)
         self.rect_icon = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_ICON_SIZE))
         self.rect_border = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_BORDER_SIZE))
         self.rect_hover = QRect(*(lambda x: ((VALUES.TALENT_CELL_SIZE-x)/2,(VALUES.TALENT_CELL_SIZE-x)/2,x,x))(VALUES.TALENT_HOVER_SIZE))
@@ -135,8 +135,6 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
     def mouseMoveEvent(self, event):
         if self.check_event(event):
             RUNTIME.set_curr_hovered(self)
-            if not RUNTIME.in_edit_mode or self.talent.name != None:
-                RUNTIME.get_top_view().update_tooltip(self)
         else:
             if RUNTIME.in_edit_mode and self.pressed:
                 for row in range(self.talent.row,7):
@@ -144,17 +142,14 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
                         dst_talent_view = self.talent.tree.view.grid_views[row,col]
                         if dst_talent_view.check_event(event, offset=QPoint(self.x() - dst_talent_view.x(), self.y() - dst_talent_view.y())):
                             RUNTIME.set_curr_hovered(dst_talent_view)
-                            RUNTIME.get_top_view().update_tooltip(self)
             else:
                 RUNTIME.clear_hovered()
-                RUNTIME.get_top_view().update_tooltip(self)
 
     def mouseReleaseEvent(self, event):
         if self.check_event(event):
             if RUNTIME.in_edit_mode and event.button() == Qt.LeftButton:
                 RUNTIME.get_top_view().show_edit_talent_view(self.talent)
                 RUNTIME.clear_pressed()
-                RUNTIME.get_top_view().update_tooltip(self)
                 return
             elif event.button() == Qt.LeftButton:
                 self.talent.add_point()
@@ -181,7 +176,7 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
             RUNTIME.get_top_view().update_tooltip(self)
     
     def check_event(self, event, offset=QPoint(0,0)):
-        if RUNTIME.edit_window_open or len(self.blocking_arrows):
+        if RUNTIME.edit_window_open or len(self.blocking_arrows) > 0:
             return False
         elif RUNTIME.in_edit_mode and self.talent.name == None:
             return event.pos() + offset in self.rect_add_talent_h or event.pos() in self.rect_add_talent_v
@@ -212,6 +207,15 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
     def get_html_ranks(self, color="gold"):
         return "<font color=\"{}\">{}</font>".format(color, self.talent.ranks)
     
+    def set_hovered(self, hovered):
+        if self.hovered != hovered:
+            self.hovered = hovered
+            self.update()
+            if self.hovered and self.talent.name != None:
+                RUNTIME.get_top_view().update_tooltip(self)
+            else:
+                RUNTIME.get_top_view().hide_tooltip()
+    
     def add_blocking_arrow(self, arrow):
         self.blocking_arrows |= {arrow}
         if len(self.blocking_arrows) == 1:
@@ -230,18 +234,16 @@ class TalentView(QWidget, Hoverable, Pressable, Selectable):
 
 
 
-class TreeView(QWidget):
+class TreeView(QWidget, Hoverable):
 
     def __init__(self, tree):
         super().__init__()
         self.setGeometry(0,0,VALUES.TREE_WIDTH,VALUES.TREE_HEIGHT)
         self.setFixedSize(self.width(), self.height())
         self.tree = tree
-        self.background = QLabel(self)
-        self.background.resize(self.width(), self.height())
-        self.background.setPixmap(QPixmap(self.tree.background).scaledToHeight(self.height()))
-        self.background.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.pixmap = PIXMAPS.get_pixmap(self.tree.background).scaled(self.width(), self.height(), transformMode=Qt.SmoothTransformation)
         self.grid_views = np.ndarray(shape=(7,4), dtype=TalentView)
+        self.setAttribute
     
     def add_arrow_view(self, arrow_view):
         arrow_view.update()
@@ -255,6 +257,10 @@ class TreeView(QWidget):
         self.grid_views[src.row, src.col].remove_blocking_arrow(arrow_view)
         self.update()
     
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), self.pixmap)
+    
     def remove_arrow_view(self, arrow_view):
         arrow_view.setParent(None)
         arrow_view.setVisible(False)
@@ -267,7 +273,7 @@ class TreeView(QWidget):
             self.grid_views[row, dst.col].remove_blocking_arrow(arrow_view)
 
     def data_updated(self):
-        self.background.setPixmap(QPixmap(self.tree.background).scaledToHeight(self.height()))
+        self.pixmap = PIXMAPS.get_pixmap(self.tree.background).scaled(self.width(), self.height(), transformMode=Qt.SmoothTransformation)
 
     def set_talent_view(self, talent_view):
         row = talent_view.talent.row
@@ -529,50 +535,39 @@ class TooltipView(QLabel):
         self.background = BackgroundView(parent)
         self.background_pixmap = None
         self.previous_talent_view = None
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.background.setAttribute(Qt.WA_TransparentForMouseEvents)
     
     def update_tooltip(self, talent_view):
-        if self.previous_talent_view != talent_view:
-            self.hide_tooltip()
-
-        self.previous_talent_view = talent_view
-        if talent_view.hovered and talent_view.talent.name != None:
-            old_x = self.x()
-            old_y = self.y()
-            old_geometry = self.geometry()
-            self.setText(talent_view.get_html_tooltip())
-            self.adjustSize()
-            tree_position = talent_view.talent.tree.view.geometry().topLeft()
-            talent_position = talent_view.geometry().topRight()
-            new_x = tree_position.x() + talent_position.x()
-            new_y = talent_position.y() - self.height() + VALUES.TOOLTIP_VERTICAL_OFFSET
-            if new_x > VALUES.FRAME_WIDTH - VALUES.TOOLTIP_WIDTH:
-                new_x -= (VALUES.TOOLTIP_WIDTH + VALUES.TOOLTIP_FLIPOVER_PADDING)
-            if new_y < VALUES.TOOLTIP_Y_FLOOR:
-                new_y = VALUES.TOOLTIP_Y_FLOOR
-            if new_x != old_x or new_y != old_y:
-                self.move(new_x, new_y)
-            if self.geometry() != old_geometry:
-                self.background.update_background(self)
-            if not self.isVisible():
-                self.setVisible(True)
-            if not self.background.isVisible():
-                self.background.setVisible(True)
-        else:
-            self.setVisible(False)
-            self.background.setVisible(False)
+        old_x = self.x()
+        old_y = self.y()
+        old_geometry = self.geometry()
+        self.setText(talent_view.get_html_tooltip())
+        self.adjustSize()
+        tree_position = talent_view.talent.tree.view.geometry().topLeft()
+        talent_position = talent_view.geometry().topRight()
+        new_x = tree_position.x() + talent_position.x()
+        new_y = talent_position.y() - self.height() + VALUES.TOOLTIP_VERTICAL_OFFSET
+        if new_x > VALUES.FRAME_WIDTH - VALUES.TOOLTIP_WIDTH:
+            new_x -= (VALUES.TOOLTIP_WIDTH + VALUES.TOOLTIP_FLIPOVER_PADDING)
+        if new_y < VALUES.TOOLTIP_Y_FLOOR:
+            new_y = VALUES.TOOLTIP_Y_FLOOR
+        if new_x != old_x or new_y != old_y:
+            self.move(new_x, new_y)
+        if self.geometry() != old_geometry:
+            self.background.update_background(self)
+        if not self.isVisible():
+            self.setVisible(True)
+        if not self.background.isVisible():
+            self.background.setVisible(True)
         self.background.raise_()
         self.raise_()
         self.update()
     
     def hide_tooltip(self):
-        if self.previous_talent_view != None:
-            self.previous_talent_view.is_hovered = False
-            self.previous_talent_view.update()
+        if self.isVisible():
             self.setVisible(False)
             self.background.setVisible(False)
-    
-    def mouseMoveEvent(self, event):
-        self.hide_tooltip()
 
 
 
@@ -1041,7 +1036,6 @@ class ArrowView(QWidget, Hoverable, Pressable):
         self.arrow = arrow
         self.setParent(arrow.tree.view)
         self.setMouseTracking(True)
-        self.setAttribute(Qt.WA_Hover)
         self.src = self.arrow.src.view
         self.dst = self.arrow.dst.view
         self.down = self.dst.talent.row - self.src.talent.row
